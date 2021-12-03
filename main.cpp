@@ -1,6 +1,6 @@
-// CSC 456 Assignment 3
-// Nate O'Meara
-// Due 11/21/2021
+// CSC 456 Assignment 4
+// Nate O'Meara && Alex Zschoche
+// Due 12/07/2021
 
 // Libraries
 #include <iostream>
@@ -20,19 +20,35 @@ int write( int, int);
 int read( int, int);
 void printMemory();
 void runCommands(string);
+void updateLruStack( int, int);
 
 
 // Global Variables
+
+struct pageTableItem
+{
+    int frameNumber;
+    int valid;
+};
+
 struct process
 {
     int pid;
     int size;
-    vector<int> pageTable;
+    vector<pageTableItem> pageTable;
+};
+
+
+struct lruItem
+{
+    int pid;
+    int pageNumber;
 };
 
 vector<int> freeFrameList;
 vector<process> processList;
 vector<int> memory;
+vector<lruItem> LRU_stack;
 
 
 int main()
@@ -93,7 +109,8 @@ int allocate(int allocSize, int pid)
         {
             // add page to pageTable and set to random free frame
             int randomFrame = rand() % freeFrameList.size();
-            newProcess.pageTable.push_back(freeFrameList[randomFrame]);
+            pageTableItem pti = {.frameNumber = freeFrameList[randomFrame], .valid = 1};
+            newProcess.pageTable.push_back(pti);
             freeFrameList.erase(freeFrameList.begin() + randomFrame);         
 
         }
@@ -129,7 +146,7 @@ int deallocate( int pid)
     int frameNum = 0;
     for(int x = 0; x < processList[processIndex].size; x++)
     {
-        frameNum = processList[processIndex].pageTable[x];
+        frameNum = processList[processIndex].pageTable[x].frameNumber;
         freeFrameList.push_back(frameNum);
 
     }
@@ -168,7 +185,7 @@ int write( int pid, int logical_address)
         return -1;
     }
     
-    int frameIndex = processList[processIndex].pageTable[logical_address];
+    int frameIndex = processList[processIndex].pageTable[logical_address].frameNumber;
     memory[frameIndex] = value;
 
     return 1;
@@ -202,7 +219,7 @@ int read( int pid, int logical_address)
         }
     }
     
-    int frameIndex = processList[processIndex].pageTable[logical_address];
+    int frameIndex = processList[processIndex].pageTable[logical_address].frameNumber;
     value = memory[frameIndex];
 
     cout << "The value from logical_address " << logical_address << " in process " << pid << " is: " << value << endl; 
@@ -292,4 +309,28 @@ void runCommands(string command)
         }
 
 
+}
+
+void updateLruStack( int pid, int pageNumber)
+{
+    // create new lruItem
+    lruItem li = {.pid = pid, .pageNumber = pageNumber};
+
+    // look to see if lruItem is in list then move to back
+    for (int i = 0; i < LRU_stack.size(); i++)
+    {
+        if (LRU_stack[i].pid == pid && LRU_stack[i].pageNumber == pageNumber)
+        {
+            LRU_stack.erase(LRU_stack.begin() + 1);
+            LRU_stack.push_back(li);
+            break;
+            return;
+            
+        }
+        
+    }
+
+    // if get here add reference to the top.
+    LRU_stack.push_back(li);
+    
 }
