@@ -1,6 +1,6 @@
-Nate O'Meara 
+Nate O'Meara and Alex Zschoche
 <br/>
-Operating Systems Programming Assignment 3
+Operating Systems Programming Assignment 4
 <br/>
 11/20/2021
 
