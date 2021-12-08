@@ -85,6 +85,8 @@ void memoryManager(int memSize, int frameSize)
 
 int allocate(int allocSize, int pid)
 {
+
+
     // check if process is already allocated
     for (int i =0; i < processList.size(); i++)
     {
@@ -96,27 +98,55 @@ int allocate(int allocSize, int pid)
         }
     }
 
-    // See if there are enough free frames
-    if (freeFrameList.size() < allocSize)
+    process newProcess = {.pid = pid, .size = allocSize};
+    for(int i =0; i < allocSize; i++)
     {
-        cout << "There are not enough free frames" << endl;
-        return -1;
-    }
-    else
-    {
-        process newProcess = {.pid = pid, .size = allocSize};
-        for(int i =0; i < allocSize; i++)
+        if(freeFrameList.size() > 0)
         {
             // add page to pageTable and set to random free frame
             int randomFrame = rand() % freeFrameList.size();
             pageTableItem pti = {.frameNumber = freeFrameList[randomFrame], .valid = 1};
             newProcess.pageTable.push_back(pti);
-            freeFrameList.erase(freeFrameList.begin() + randomFrame);         
+            freeFrameList.erase(freeFrameList.begin() + randomFrame);  
+            updateLruStack(pid, i);
+    
+
+        }
+        // Replace victim
+        else
+        {
+            lruItem victim = LRU_stack[0];
+            LRU_stack.erase(LRU_stack.begin());
+            updateLruStack(pid, i);
+
+            // mark victim as invalid
+            for (int j = 0; j < processList.size(); j++)
+            {
+                if(victim.pid == processList[j].pid)
+                {
+                    processList[j].pageTable[victim.pageNumber].valid = 0;
+                    // delete contents of victim page
+                    memory[processList[j].pageTable[victim.pageNumber].frameNumber] = NULL;
+                    // add newly empty space to free frame list
+                    freeFrameList.push_back(processList[j].pageTable[victim.pageNumber].frameNumber);
+
+                    break;
+                }
+            }
+            
+
+            // add page to pageTable and set to random free frame
+            int randomFrame = rand() % freeFrameList.size();
+            pageTableItem pti = {.frameNumber = freeFrameList[randomFrame], .valid = 1};
+            newProcess.pageTable.push_back(pti);
+            freeFrameList.erase(freeFrameList.begin() + randomFrame); 
 
         }
 
-        processList.push_back(newProcess);
     }
+
+    processList.push_back(newProcess);
+
 
 
     return 1;
@@ -185,8 +215,48 @@ int write( int pid, int logical_address)
         return -1;
     }
     
-    int frameIndex = processList[processIndex].pageTable[logical_address].frameNumber;
-    memory[frameIndex] = value;
+    // chek if page is valid
+
+    if(processList[processIndex].pageTable[logical_address].valid == 1)
+    {
+
+        int frameIndex = processList[processIndex].pageTable[logical_address].frameNumber;
+        memory[frameIndex] = value;
+        updateLruStack(pid, logical_address);
+
+
+    }
+    else
+    {
+        lruItem victim = LRU_stack[0];
+        LRU_stack.erase(LRU_stack.begin());
+        updateLruStack(pid, logical_address);
+
+        // mark victim as invalid
+        for (int j = 0; j < processList.size(); j++)
+        {
+            if(victim.pid == processList[j].pid)
+            {
+                processList[j].pageTable[victim.pageNumber].valid = 0;
+                // delete contents of victim page
+                memory[processList[j].pageTable[victim.pageNumber].frameNumber] = NULL;
+                freeFrameList.push_back(processList[j].pageTable[victim.pageNumber].frameNumber);
+
+
+
+                break;
+            }
+        }
+
+        // assign frame to logical_address
+        int randomFrame = rand() % freeFrameList.size();
+        freeFrameList.erase(freeFrameList.begin() + randomFrame); 
+
+
+        processList[processIndex].pageTable[logical_address].frameNumber = randomFrame;
+        memory[randomFrame] = value;
+
+    }
 
     return 1;
 
@@ -219,10 +289,53 @@ int read( int pid, int logical_address)
         }
     }
     
-    int frameIndex = processList[processIndex].pageTable[logical_address].frameNumber;
-    value = memory[frameIndex];
+     if(processList[processIndex].pageTable[logical_address].valid == 1)
+    {
 
+        int frameIndex = processList[processIndex].pageTable[logical_address].frameNumber;
+        value = memory[frameIndex];
+
+        cout << "The value from logical_address " << logical_address << " in process " << pid << " is: " << value << endl; 
     cout << "The value from logical_address " << logical_address << " in process " << pid << " is: " << value << endl; 
+        cout << "The value from logical_address " << logical_address << " in process " << pid << " is: " << value << endl; 
+
+        updateLruStack(pid, logical_address);
+
+
+    }
+    else
+    {
+        lruItem victim = LRU_stack[0];
+        LRU_stack.erase(LRU_stack.begin());
+        updateLruStack(pid, logical_address);
+
+        // mark victim as invalid
+        for (int j = 0; j < processList.size(); j++)
+        {
+            if(victim.pid == processList[j].pid)
+            {
+                processList[j].pageTable[victim.pageNumber].valid = 0;
+                // delete contents of victim page
+                memory[processList[j].pageTable[victim.pageNumber].frameNumber] = NULL;
+                freeFrameList.push_back(processList[j].pageTable[victim.pageNumber].frameNumber);
+
+
+                break;
+            }
+        }
+
+        // assign frame to logical_address
+        int randomFrame = rand() % freeFrameList.size();
+        freeFrameList.erase(freeFrameList.begin() + randomFrame); 
+
+        processList[processIndex].pageTable[logical_address].frameNumber = randomFrame;
+
+        value = memory[randomFrame];
+
+        cout << "The value from logical_address " << logical_address << " in process " << pid << " is: " << value << endl; 
+
+    }
+
 
     return 1;
 
@@ -251,6 +364,13 @@ void printMemory()
     for (int i = 0; i < processList.size(); i++)
     {
         cout << "PID: " << processList[i].pid << " SIZE: " << processList[i].size << " | ";
+    }
+
+    cout << endl << "------------------ LRU STACK ------------------------" << endl;
+
+    for (int i = 0; i < LRU_stack.size(); i++)
+    {
+        cout << "PID: " << LRU_stack[i].pid << " PAGE NUMBER: " << LRU_stack[i].pageNumber << " | ";
     }
     cout << endl << endl;
 
